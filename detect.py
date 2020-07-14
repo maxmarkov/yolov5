@@ -50,7 +50,19 @@ def detect(save_img=False):
     names = model.module.names if hasattr(model, 'module') else model.names
     colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(len(names))]
 
-    # Run inference
+    #################################################################################
+    # read file with the urn coordinates and convert them into xyxy format
+    with open(opt.urn, 'r') as f:
+        xywh_urn = [float(i) for i in f.readline().split()]
+        xywh_urn.pop(0)  # get rid of class integer
+        xywh_urn = np.array(xywh_urn).reshape(1,len(xywh_urn))
+        xyxy_urn = xywh2xyxy(xywh_urn).flatten()
+        #xyxy_urn = [torch.tensor(i) for i in xyxy_urn]
+        #print(xyxy_urn)
+    f.close()
+    ################################################################################
+
+    # Run infernce
     t0 = time.time()
     img = torch.zeros((1, 3, imgsz, imgsz), device=device)  # init img
     _ = model(img.half() if half else img) if device.type != 'cpu' else None  # run once
@@ -84,13 +96,21 @@ def detect(save_img=False):
             txt_path = str(Path(out) / Path(p).stem) + ('_%g' % dataset.frame if dataset.mode == 'video' else '')
             s += '%gx%g ' % img.shape[2:]  # print string
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
+          
+            #################################################################################
+            #  Restore non-normalized coordinates 
+            gn_array = [im0.shape[1], im0.shape[0], im0.shape[1], im0.shape[0]]
+            xyxy_ref = np.multiply(gn_array, xyxy_urn)
+            plot_one_box(xyxy_ref, im0, color=[255,255,255], line_thickness=6)
+            #################################################################################
+
             if det is not None and len(det):
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
 
                 # Print results
                 for c in det[:, -1].unique():
-                    n = (det[:, -1] == c).sum()  # detections per class
+                    n = (det[:, -1] == c).sum()           # detections per class
                     s += '%g %ss, ' % (n, names[int(c)])  # add to string
 
                 # Write results
@@ -102,7 +122,7 @@ def detect(save_img=False):
 
                     if save_img or view_img:  # Add bbox to image
                         label = '%s %.2f' % (names[int(cls)], conf)
-                        plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
+                        #plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
 
             # Print time (inference + NMS)
             print('%sDone. (%.3fs)' % (s, t2 - t1))
@@ -152,6 +172,7 @@ if __name__ == '__main__':
     parser.add_argument('--classes', nargs='+', type=int, help='filter by class')
     parser.add_argument('--agnostic-nms', action='store_true', help='class-agnostic NMS')
     parser.add_argument('--augment', action='store_true', help='augmented inference')
+    parser.add_argument('--urn', type=str, default='inference/frame_0000000001.txt', help='text file with urn xywh coordinates')
     opt = parser.parse_args()
     print(opt)
 
