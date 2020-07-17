@@ -122,6 +122,7 @@ def detect(save_img=False):
                     #            get centroid of an object
                     centroid_obj = np.array(xyxy2xywh(torch.tensor(xyxy).view(1, 4)))[0][:2].reshape(1,2)
                     D = dist.cdist(centroid_ref, centroid_obj, metric="euclidean")
+                    print('Distance', D)
                     #####################################################
 
                     if save_txt:  # Write to file
