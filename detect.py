@@ -6,6 +6,7 @@ from utils import google_utils
 from utils.datasets import *
 from utils.utils import *
 
+from scipy.spatial import distance as dist
 
 def detect(save_img=False):
     out, source, weights, view_img, save_txt, imgsz = \
@@ -60,6 +61,7 @@ def detect(save_img=False):
         #xyxy_urn = [torch.tensor(i) for i in xyxy_urn]
         #print(xyxy_urn)
     f.close()
+    MIN_DISTANCE = 30.
     ################################################################################
 
     # Run infernce
@@ -101,7 +103,8 @@ def detect(save_img=False):
             #  Restore non-normalized coordinates 
             gn_array = [im0.shape[1], im0.shape[0], im0.shape[1], im0.shape[0]]
             xyxy_ref = np.multiply(gn_array, xyxy_urn)
-            plot_one_box(xyxy_ref, im0, color=[255,255,255], line_thickness=6)
+            centroid_ref = xyxy2xywh(xyxy_ref.reshape((1,4)))[0][:2].reshape(1,2)  # xy is the centroid coordinates in xywh representation
+            plot_one_box(xyxy_ref, im0, color=[255,255,255], line_thickness=1)
             #################################################################################
 
             if det is not None and len(det):
@@ -115,6 +118,12 @@ def detect(save_img=False):
 
                 # Write results
                 for *xyxy, conf, cls in det:
+                    #####################################################
+                    #            get centroid of an object
+                    centroid_obj = np.array(xyxy2xywh(torch.tensor(xyxy).view(1, 4)))[0][:2].reshape(1,2)
+                    D = dist.cdist(centroid_ref, centroid_obj, metric="euclidean")
+                    #####################################################
+
                     if save_txt:  # Write to file
                         xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
                         with open(txt_path + '.txt', 'a') as f:
@@ -122,7 +131,8 @@ def detect(save_img=False):
 
                     if save_img or view_img:  # Add bbox to image
                         label = '%s %.2f' % (names[int(cls)], conf)
-                        plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
+                        if D < MIN_DISTANCE:
+                             plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
 
             # Print time (inference + NMS)
             print('%sDone. (%.3fs)' % (s, t2 - t1))
